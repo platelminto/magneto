@@ -1,4 +1,5 @@
 import re
+from collections import defaultdict
 from pathlib import Path
 from typing import Literal
 
@@ -8,19 +9,19 @@ from matplotlib import pyplot as plt
 from sklearn.preprocessing import StandardScaler
 
 
-def get_data(set_type: Literal["cross", "intra"], test_set_type: Literal["val", "test"]):
-    train_intra_datasets = get_datasets(set_type, "train")
-    train_intra_X = standardize(np.stack([d for d, _ in train_intra_datasets]))
-    train_intra_y = np.array([label for _, label in train_intra_datasets])
+def get_data(set_type: Literal["cross", "intra"], test_set_type: Literal["val", "test"], split_participants=False):
+    train_datasets = get_datasets(set_type, "train", split_participants)
+    train_X = standardize(np.stack([d for d, _ in train_datasets]))
+    train_y = np.array([label for _, label in train_datasets])
 
-    test_intra_datasets = get_datasets(set_type, test_set_type)
-    test_intra_X = standardize(np.stack([d for d, _ in test_intra_datasets]))
-    test_intra_y = np.array([label for _, label in test_intra_datasets])
+    test_datasets = get_datasets(set_type, test_set_type, split_participants)
+    test_X = standardize(np.stack([d for d, _ in test_datasets]))
+    test_y = np.array([label for _, label in test_datasets])
 
-    return train_intra_X, train_intra_y, test_intra_X, test_intra_y
+    return train_X, train_y, test_X, test_y
 
 
-def get_datasets(set_type: Literal["cross", "intra"], data_set: Literal["train", "val", "test"])\
+def get_datasets(set_type: Literal["cross", "intra"], data_set: Literal["train", "val", "test"], split_participants=False)\
         -> list[tuple[list[np.ndarray], str]]:
     set_type = set_type.capitalize()
 
@@ -34,16 +35,23 @@ def get_datasets(set_type: Literal["cross", "intra"], data_set: Literal["train",
         test_folder_name = "test3" if set_type == "Cross" else "test"
         directories.append(Path("data") / set_type / test_folder_name)
 
-    data = []
-    labels = []
+    data = defaultdict(list)
+    labels = defaultdict(list)
     for directory in directories:
         for file in sorted(directory.glob("*.h5")):
             with h5py.File(file, 'r') as f:
                 participant_id = re.search(r"\d+", file.stem).group(0)
                 label = file.stem.split(participant_id)[0][:-1]
 
-                data.append(np.array(f[f"{label}_{participant_id}"]))
-                labels.append(label)
+                data[participant_id].append(np.array(f[f"{label}_{participant_id}"]))
+                labels[participant_id].append(label)
+
+    if split_participants:
+        data = [data[participant_id] for participant_id in data]
+        labels = [labels[participant_id] for participant_id in labels]
+    else:
+        data = [d for participant_id in data for d in data[participant_id]]
+        labels = [label for participant_id in labels for label in labels[participant_id]]
 
     return list(zip(data, labels))
 
@@ -89,3 +97,8 @@ def plot_activations(activations: np.ndarray):
     outlier_mean = 1.5
     print(f"Sensors with absolute mean >{outlier_mean}:",
           np.where(abs(np.mean(per_sensor_data, axis=1)) > outlier_mean))
+
+
+if __name__ == '__main__':
+    train_intra_X, train_intra_y, test_intra_X, test_intra_y = get_data_separate_participants("cross", "test")
+    plot_activations(train_intra_X[0])
