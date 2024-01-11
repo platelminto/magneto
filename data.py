@@ -1,10 +1,8 @@
-from typing import Any
 import h5py
 import numpy as np
 import tqdm
 
 from matplotlib import pyplot as plt
-import seaborn as sns
 
 from pathlib import Path
 import torch
@@ -12,15 +10,17 @@ import torch
 import argparse
 
 parser = argparse.ArgumentParser(prog="Train-ViVit on MEG")
-parser.add_argument("downsample_multiplier", default=4, type=int)
-parser.add_argument("lr", default=0.00001, type=float)
+parser.add_argument("--downsample_multiplier", default=240, type=int, required=False)
+parser.add_argument("--lr", default=0.0000001, type=float, required=False)
+parser.add_argument("--batch_size", default=6, type=int, required=False)
 args = parser.parse_args()
 
 
 OLD_FREQ = 2034
 NEW_FREQ = OLD_FREQ // args.downsample_multiplier
 LR = args.lr
-print(f"{NEW_FREQ=}, {LR=}")
+BATCH_SIZE = args.batch_size
+print(f"{NEW_FREQ=}, {LR=}, {BATCH_SIZE=}")
 
 
 def load_labels(path: Path) -> np.ndarray:
@@ -41,10 +41,6 @@ def load_labels(path: Path) -> np.ndarray:
 def downsample(data, old_freq, new_freq):
     # Calculate the downsampling factor
     downsample_factor = old_freq // new_freq
-
-    # Check if the total samples are divisible by the downsampling factor
-    # if data.shape[1] % downsample_factor != 0: # -> 2024
-    #     print(f"Warning: The total samples ({data.shape[1]}) are not divisible by the downsampling factor ({downsample_factor}). The remaining {data.shape[1] % downsample_factor} samples will be discarded.")
 
     # Reshape the data to prepare for downsampling
     reshaped_data = data[
@@ -94,11 +90,12 @@ class Scaler:
     def __init__(self):
         self.mean, self.std = None, None
 
-    def __call__(self, X: np.ndarray) -> Any:
+    def __call__(self, X: np.ndarray) -> np.ndarray:
         if self.mean is None:
             self.mean = X.mean(0, keepdims=True)
             self.std = X.std(0, keepdims=True)
         return (X - self.mean) / self.std
+
 
 
 def load_X_y(path: Path, scaler=Scaler()):
@@ -119,7 +116,7 @@ def plot_results(train_losses, test_losses, train_accs, test_accs):
     axs[0].legend()
 
     # Plotting train and test accuracy
-    axs[1].plot(train_accs, label="Train Accuracy")
+    axs[1].plot(train_accs, label="Train (batch) Accuracy")
     axs[1].plot(test_accs, label="Test Accuracy")
     axs[1].set_title("Train and Test Accuracy")
     axs[1].set_xlabel("Epochs")
@@ -146,15 +143,16 @@ if __name__ == "__main__":
         list((cross_dir / "test2").glob("*.h5")),
         # list((cross_dir / "test3").glob("*.h5")),
     )
-    *test_data, (X_train, y_train) = map(load_X_y, cross_dir_glob)
-
-    X_train = X_train.to("cuda")
-    y_train = y_train.to("cuda")
+    (X_train, y_train), *test_data  = map(load_X_y, cross_dir_glob)
 
     X_test, y_test = list(tqdm.tqdm(map(torch.cat, zip(*test_data))))
-    X_test = X_test.to("cuda")
-    y_test = y_test.to("cuda")
-    
+
+    train_dataset = torch.utils.data.dataset.TensorDataset(X_train, y_train)
+    test_dataset = torch.utils.data.dataset.TensorDataset(X_test, y_test)
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=BATCH_SIZE, shuffle=True
+    )
+    test_loader = torch.utils.data.DataLoader(test_dataset)
 
     # # print(test_data)
     # # print(*zip(*test_data))
@@ -168,7 +166,7 @@ if __name__ == "__main__":
     )
     vivit_model = VivitForVideoClassification(conf).to("cuda")
 
-    optimizer = torch.optim.Adam(vivit_model.parameters(), lr=LR)
+    optimizer = torch.optim.Adam(vivit_model.parameters(), lr=LR, weight_decay=0.001)
 
     test_losses = list()
     train_losses = list()
@@ -177,22 +175,39 @@ if __name__ == "__main__":
 
     pbar = tqdm.trange(100)
     for epoch in pbar:
-        optimizer.zero_grad()
-        output = vivit_model(pixel_values=X_train, labels=y_train)
-        output.loss.backward()
-        optimizer.step()
-        with torch.no_grad():
-            test_out = vivit_model(pixel_values=X_test, labels=y_test)
-            test_acc = torch.sum(test_out.logits.argmax(-1) == y_test) / y_test.shape[0]
-            train_acc = (
-                torch.sum(output.logits.argmax(-1) == y_train) / y_train.shape[0]
+        train_acc = 0.
+        epoch_loss = 0.
+        for X_batch, y_batch in train_loader:
+            optimizer.zero_grad()
+            output = vivit_model(
+                pixel_values=X_batch.to("cuda"), labels=y_batch.to("cuda")
             )
+            output.loss.backward()
+            optimizer.step()
+            with torch.no_grad():
+                train_acc += (
+                torch.sum(output.logits.argmax(-1).to("cpu") == y_batch)
+                / y_batch.shape[0]
+            ).item()
+                epoch_loss += output.loss.item()
+        with torch.no_grad():
+            vivit_model.train(False)
+            test_out = vivit_model(
+                pixel_values=X_test.to("cuda"), labels=y_test.to("cuda")
+            )
+            test_acc = (
+                torch.sum(test_out.logits.argmax(-1).to("cpu") == y_test)
+                / y_test.shape[0]
+            )
+            
             pbar.set_description(
-                f"Loss: {output.loss.item():.2f} / {test_out.loss.item():.2f}, Accuracy: {train_acc:.2f} / {test_acc:.2f}"
+                f"Loss: {epoch_loss / len(train_loader):.2f} / {test_out.loss.item():.2f}, Accuracy: {train_acc / len(train_loader):.2f} / {test_acc:.2f}"
             )
             test_losses.append(test_out.loss.item())
-            train_losses.append(output.loss.item())
-            train_accs.append(train_acc.item())
+            train_losses.append(epoch_loss / len(train_loader))
+            train_accs.append(train_acc / len(train_loader))
             test_accs.append(test_acc.item())
+            vivit_model.train()
+
 
     plot_results(train_losses, test_losses, train_accs, test_accs)
