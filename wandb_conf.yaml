@@ -17,4 +17,4 @@ parameters:
   epochs:
     values: [5, 10, 15, 20, 40]
   downsample_multiplier:
-    values: [50, 100, 203, 240]
+    values: [240, 300, 320, 340, 360, 400, 480]
