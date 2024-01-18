@@ -1,0 +1,28 @@
+The dataset used contains the MEG data of various participants (1 for the "intra" set, and 6 in the "cross" set) while performing certain tasks. During each task run, the 248 sensors placed on the participant's scalp start recording at 2034Hz for roughly 17.5 seconds. This leaves us with 35624 samples per sensor per task run: in the "intra" set's training data, where we have 32 task runs, we find we have over 280 million total recordings, all for just 1 individual. Stored as double-precision floating point numbers, this is 2.3GB of data, which may sound like a lot. It is! Thankfully, it can still fit into the RAM of most computers, so loading it all at once wasn't a problem. The size of this dataset does start to become an issue once we start training any kind of machine learning model, and how we get around this will be described when relevant.
+
+Each floating point number represents the Tesla measured by each sensor, a tiny number given it's representative of the the magnetic field of our brains: they mostly range around -1e-12 to 1e-12. We really don't want to handle numbers this small, for many reasons: LIST
+
+- Algorithmic performance: many machine learning algorithms expect standardised data. Without this the convergence of algorithms like gradient descent, or PCA, can be much slower, or even incorrectly learn from the features.
+- Numerical stability: very small numbers need to be accompanied by very large model weights, both of which can cause issues given computer's limited range for numbers.
+- Simplicity: it's also just easier to work with numbers with a more "normal" scale. Standardising keeps the relevant features of the data, while getting much more manageable numbers.
+
+For the reasons above, we apply Z-score normalisation to the data, forcing it to have a mean of 0 and standard deviation of 1. We can now begin to take a look at the data (CHART SENSOR DATA OVER 1 RUN, TESLA OVER TIME)
+
+As we can see from CHART, the Tesla value at each sensor varies slightly over time, but this value doesn't change as much as the difference in Tesla between different sensors. This means we can likely downsample the data without losing too much information relevant to task classification, either through statistical methods such as PCA, or simply through max & average pooling. Reducing the dimensionality of the data will be crucial to be able to efficiently train a model, and the current 2034Hz sample rate is an easy target for this.
+
+We can also look at the mean sensor data across all samples (CHART), to see if there's any significant differences between the sensors themselves. In doing so, we found 1 extreme result at sensor 236. We can't know the actual reason for this, but it's possible the sensor was placed wrong, or maybe the data was recorded incorrectly. Regardless, given its mean activation is over an order of magnitude away from any other sensor, we can safely call it an outlier and remove it from the data. 
+
+PCA PARAGRAPH
+
+DOWNSAMPLING METHODS DONE BY YOU GUYS PARAGRAPH
+
+Discussion:
+
+We struggled with getting high accuracies for the "cross" dataset, and when we did, they varied a lot. We believe this is because we simply did not have enough data. "Data" here is important to specify in detail: we had over half a billion total recordings in the training set, how could this not be enough? We turn to an interesting result we found during our experiments for the "intra" dataset: we could get 100% accuracy on our validation set (which we later saw also translated to the test set), using logistic regression, no hyperparameter tuning*, and *ITALICS FOR EMPHASIS* only the first 2 samples (out of 35624 total) from each sensor. A near 18,000x reduction in dimensionality, with an extremely simple method. It becomes apparent that the massive quantities of sensor data aren't all that useful.
+
+Therefore, we turn to what we believe is the true "size" of the "intra" dataset: the 32 trials we had for all 4 of the tasks. 32 datapoints, from which we could split a reasonable number into training and validation sets, perform hyperparameter tuning, and achieve the high scores we did. As mentioned above (TODO: MENTIONED INTRA IS EASY IN DISCUSSION ABOVE), it turned out that task classification based on 1 subject isn't too difficult, and 32 datapoints for the model training & selection is enough.
+
+Back to our "cross" dataset. What's its true "size"? ITS 2, NOT MUCH, EVEN USING VALSET NOT ENOUGH, BUT DEF CANT DO ANYTHING WITHOUT USING TEST AS VALSET. TODO.
+
+
+* i.e. scitkit-learn's default hypers.

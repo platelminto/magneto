@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from sklearn.preprocessing import StandardScaler
 
 
-def get_data(set_type: Literal["cross", "intra"], test_set_type: Literal["val", "test"], split_participants=False):
+def get_data(set_type: Literal["cross", "intra"], test_set_type: Literal["val", "test", "test1", "test2", "test3"], split_participants=False):
     train_datasets = get_datasets(set_type, "train", split_participants)
     train_X = standardize(np.stack([d for d, _ in train_datasets]))
     train_y = np.array([label for _, label in train_datasets])
@@ -21,7 +21,7 @@ def get_data(set_type: Literal["cross", "intra"], test_set_type: Literal["val", 
     return train_X, train_y, test_X, test_y
 
 
-def get_datasets(set_type: Literal["cross", "intra"], data_set: Literal["train", "val", "test"], split_participants=False)\
+def get_datasets(set_type: Literal["cross", "intra"], data_set: Literal["train", "val", "test", "test1", "test2", "test3"], split_participants=False)\
         -> list[tuple[list[np.ndarray], str]]:
     set_type = set_type.capitalize()
 
@@ -34,6 +34,12 @@ def get_datasets(set_type: Literal["cross", "intra"], data_set: Literal["train",
     elif data_set == "test":
         test_folder_name = "test3" if set_type == "Cross" else "test"
         directories.append(Path("data") / set_type / test_folder_name)
+    elif data_set == "test1":
+        directories.append(Path("data") / set_type / "test1")
+    elif data_set == "test2":
+        directories.append(Path("data") / set_type / "test2")
+    elif data_set == "test3":
+        directories.append(Path("data") / set_type / "test3")
 
     data = defaultdict(list)
     labels = defaultdict(list)
@@ -100,5 +106,4 @@ def plot_activations(activations: np.ndarray):
 
 
 if __name__ == '__main__':
-    train_intra_X, train_intra_y, test_intra_X, test_intra_y = get_data_separate_participants("cross", "test")
-    plot_activations(train_intra_X[0])
+    get_data("cross", "val", split_participants=True)
