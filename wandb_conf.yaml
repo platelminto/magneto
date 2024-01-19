@@ -1,5 +1,5 @@
 # wandb_conf.yaml
-program: vivit.py
+program: ViViT.py
 method: random
 name: Vivit
 metric:
