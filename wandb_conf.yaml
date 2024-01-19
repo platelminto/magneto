@@ -1,0 +1,20 @@
+# wandb_conf.yaml
+program: ViViT.py
+method: random
+name: Vivit
+metric:
+  goal: maximize
+  name: val_acc
+parameters:
+  batch_size: 
+    values: [3,6,12]
+  lr:
+    min: 0.00000001
+    max: 0.001
+  weight_decay:
+    min: 0.
+    max: 0.99
+  epochs:
+    values: [5, 10, 15, 20, 40]
+  downsample_multiplier:
+    values: [240, 300, 320, 340, 360, 400, 480]
