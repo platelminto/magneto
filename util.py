@@ -76,26 +76,26 @@ def plot_activations(activations: np.ndarray):
 
     example = activations[0]
 
-    fig, axs = plt.subplots(1, 1, figsize=(7, 3))
-    # axs[0].bar(np.arange(example.shape[0]), np.mean(example, axis=1), yerr=np.std(example, axis=1))
-    # axs[0].set_ylabel("Mean activation (standardised)")
-    # axs[0].set_title("Mean activation of each sensor for 1 example")
+    fig, axs = plt.subplots(2, 1, figsize=(9, 5))
+    axs[0].bar(np.arange(example.shape[0]), np.mean(example, axis=1), yerr=np.std(example, axis=1))
+    axs[0].set_ylabel("Mean activation (standardised)")
+    axs[0].set_title("Mean activation of each sensor for 1 example")
 
-    axs.bar(np.arange(per_sensor_data.shape[0]), np.mean(per_sensor_data, axis=1),
+    axs[1].bar(np.arange(per_sensor_data.shape[0]), np.mean(per_sensor_data, axis=1),
                yerr=np.std(per_sensor_data, axis=1))
-    axs.set_xlabel("Sensor #")
-    axs.set_ylabel("Mean activation (standardised)")
-    # axs[1].set_title("Mean activation of each sensor across all examples")
+    axs[1].set_xlabel("Sensor #")
+    axs[1].set_ylabel("Mean activation (standardised)")
+    axs[1].set_title("Mean activation of each sensor across all examples")
 
-    xticks = list(axs.get_xticks())
+    xticks = list(axs[0].get_xticks())
     xticks.remove(250)
     xticks.append(236)
 
-    # axs[0].set_xticks(xticks)
-    axs.set_xticks(xticks)
+    axs[0].set_xticks(xticks)
+    axs[1].set_xticks(xticks)
 
-    # axs[0].set_xlim(0, 250)
-    axs.set_xlim(0, 250)
+    axs[0].set_xlim(0, 250)
+    axs[1].set_xlim(0, 250)
 
     plt.show()
 
